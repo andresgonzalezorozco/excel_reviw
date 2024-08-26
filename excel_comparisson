@@ -2,11 +2,6 @@ import pandas as pd
 import string
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 import os
 
 def obtener_columna_excel(index: int) -> str:
@@ -19,45 +14,6 @@ def obtener_columna_excel(index: int) -> str:
         nombre_columna = letras[index % 26] + nombre_columna
         index = index // 26 - 1
     return nombre_columna
-
-def enviar_reporte_por_email(destinatario: str, archivo_reporte: str):
-    """
-    Envía un correo electrónico con el archivo del reporte adjunto.
-    
-    Parámetros:
-    - destinatario: Dirección de correo electrónico a la que se enviará el reporte.
-    - archivo_reporte: Ruta al archivo de reporte generado (Excel).
-    """
-    remitente = "tu_email@example.com"  # Cambia por tu correo
-    asunto = "Reporte de diferencias en archivos Excel"
-    
-    # Crear el mensaje
-    msg = MIMEMultipart()
-    msg['From'] = remitente
-    msg['To'] = destinatario
-    msg['Subject'] = asunto
-
-    # Cuerpo del correo
-    cuerpo = "Se adjunta el reporte de diferencias entre los archivos Excel."
-    msg.attach(MIMEText(cuerpo, 'plain'))
-
-    # Adjuntar el archivo
-    adjunto = open(archivo_reporte, 'rb')
-    parte = MIMEBase('application', 'octet-stream')
-    parte.set_payload(adjunto.read())
-    encoders.encode_base64(parte)
-    parte.add_header('Content-Disposition', f"attachment; filename= {os.path.basename(archivo_reporte)}")
-    msg.attach(parte)
-
-    # Enviar el correo
-    servidor = smtplib.SMTP('smtp.example.com', 587)  # Cambia por tu servidor SMTP
-    servidor.starttls()
-    servidor.login(remitente, "tu_password")  # Cambia por tu contraseña
-    texto = msg.as_string()
-    servidor.sendmail(remitente, destinatario, texto)
-    servidor.quit()
-
-    print(f"Correo enviado a {destinatario} con el reporte adjunto.")
 
 def aplicar_formato_condicional(archivo_reporte: str):
     """
@@ -82,7 +38,21 @@ def aplicar_formato_condicional(archivo_reporte: str):
     wb.save(archivo_reporte)
     print(f"Formato condicional aplicado en: {archivo_reporte}")
 
-def comparar_excel(archivo1: str, archivo2: str, hoja1: str = None, hoja2: str = None, output_reporte: str = "reporte_comparacion.xlsx", destinatario_email: str = None):
+def obtener_ruta_descargas(nombre_archivo: str) -> str:
+    """
+    Obtiene la ruta de la carpeta 'Descargas' del usuario y concatena el nombre del archivo.
+    
+    Parámetros:
+    - nombre_archivo: El nombre del archivo (con extensión) que se quiere guardar.
+    
+    Retorna:
+    - La ruta completa donde se guardará el archivo.
+    """
+    # Obtener la carpeta 'Descargas' del usuario en distintos sistemas operativos
+    ruta_descargas = os.path.join(os.path.expanduser("~"), "Downloads")
+    return os.path.join(ruta_descargas, nombre_archivo)
+
+def comparar_excel(archivo1: str, archivo2: str, hoja1: str = None, hoja2: str = None, nombre_reporte: str = "reporte_comparacion.xlsx"):
     """
     Compara dos archivos de Excel línea por línea y genera un reporte de las diferencias.
     
@@ -91,13 +61,12 @@ def comparar_excel(archivo1: str, archivo2: str, hoja1: str = None, hoja2: str =
     - archivo2: Ruta al segundo archivo de Excel.
     - hoja1: Nombre de la hoja a comparar en el primer archivo (opcional, por defecto usa la primera hoja).
     - hoja2: Nombre de la hoja a comparar en el segundo archivo (opcional, por defecto usa la primera hoja).
-    - output_reporte: Nombre del archivo de salida para el reporte de diferencias (formato Excel).
-    - destinatario_email: Dirección de correo electrónico para enviar el reporte si se encuentran diferencias (opcional).
+    - nombre_reporte: Nombre del archivo de salida para el reporte de diferencias (formato Excel).
     
     Retorna:
-    - Un archivo Excel con las diferencias encontradas entre ambos archivos.
+    - Un archivo Excel con las diferencias encontradas entre ambos archivos, guardado en la carpeta "Descargas".
     """
-    # Leer los archivos de Excel en chunks (si son grandes)
+    # Leer los archivos de Excel
     try:
         df1 = pd.read_excel(archivo1, sheet_name=hoja1)
         df2 = pd.read_excel(archivo2, sheet_name=hoja2)
@@ -132,21 +101,20 @@ def comparar_excel(archivo1: str, archivo2: str, hoja1: str = None, hoja2: str =
                     "Valor Archivo 2": valor2
                 }, ignore_index=True)
 
-    # Guardar el reporte de diferencias en un archivo Excel
-    diferencias.to_excel(output_reporte, index=False)
-    print(f"Reporte de diferencias guardado en: {output_reporte}")
+    # Obtener la ruta de descarga
+    ruta_reporte = obtener_ruta_descargas(nombre_reporte)
+
+    # Guardar el reporte de diferencias en la carpeta "Descargas"
+    diferencias.to_excel(ruta_reporte, index=False)
+    print(f"Reporte de diferencias guardado en: {ruta_reporte}")
 
     # Aplicar formato condicional
-    aplicar_formato_condicional(output_reporte)
-
-    # Enviar el reporte por correo si hay diferencias y se especificó un email
-    if not diferencias.empty and destinatario_email:
-        enviar_reporte_por_email(destinatario_email, output_reporte)
+    aplicar_formato_condicional(ruta_reporte)
 
     return diferencias
 
 if __name__ == "__main__":
     archivo1 = "archivo1.xlsx"  # Cambiar por la ruta real
     archivo2 = "archivo2.xlsx"  # Cambiar por la ruta real
-    destinatario = "destinatario@example.com"  # Cambiar por el correo del destinatario
-    comparar_excel(archivo1, archivo2, destinatario_email=destinatario)
+    comparar_excel(archivo1, archivo2)
+
